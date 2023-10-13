@@ -1,0 +1,15 @@
+[package]
+name = "opengl_raytracing_engine"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+glutin = "0.29.1"
+gl = "0.14.0"
+tobj = "3.1.0"
+image = "0.24.3"
+nalgebra-glm = "0.17.0"
+rand = "0.8.4"
+libc = "0.2.132"
