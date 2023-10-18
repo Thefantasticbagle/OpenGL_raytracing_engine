@@ -1,14 +1,20 @@
 // Imports
-use std::thread;
+use std::{ thread, ptr };
 use std::sync::{Mutex, Arc, RwLock};
 
 use glutin::event::{Event, WindowEvent, DeviceEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self, *}};
 use glutin::event_loop::ControlFlow;
 
+mod util;
+mod shader;
+
 // Initial window size
 const INITIAL_SCREEN_W: u32 = 720;
 const INITIAL_SCREEN_H: u32 = 400;
 
+/**
+ * The main function.
+ */
 fn main() {
     // --- Create contexted window
     // Create context builder
@@ -51,6 +57,16 @@ fn main() {
             //gl::DebugMessageCallback(Some(util::debug_callback), ptr::null());
         }
 
+        // Set up game objects
+        let (vertices, indices) = util::create_triangle_triangle(8, 8);
+        let my_vao = unsafe {util::create_vao(&vertices, &indices)};
+        let simple_shader = unsafe {
+            shader::ShaderBuilder::new()
+                .attach_shader("shaders/simple.vert")
+                .attach_shader("shaders/simple.frag")
+                .link()
+        };
+
         // ------------------------------------------ //
         // --------------- Gameloop ----------------- //
         // ------------------------------------------ //
@@ -59,6 +75,17 @@ fn main() {
                 // Clear color and depth buffers
                 gl::ClearColor(0.04, 0.05, 0.09, 1.0);
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+
+                // Draw game objects
+                simple_shader.activate();
+                    
+                gl::BindVertexArray(my_vao);
+                gl::DrawElements(
+                    gl::TRIANGLES, 
+                    indices.len() as gl::types::GLint,
+                    gl::UNSIGNED_INT,
+                    ptr::null()
+                );
             }
 
             // "Flip" screen
