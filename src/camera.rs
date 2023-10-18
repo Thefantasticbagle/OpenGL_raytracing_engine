@@ -4,13 +4,19 @@ extern crate nalgebra_glm as glm;
  * Struct for a camera.
  */
 pub struct Camera {
+    // Set properties
     aspect_ratio: f32,
     pos: glm::Vec3,
     ang: glm::Vec3,
     fov: f32,
     z_near: f32,
     z_far: f32,
+
+    // Calculated properties
     view_transformation: glm::Mat4,
+    left: glm::Vec3,
+    up: glm::Vec3,
+    front: glm::Vec3,
 }
 
 /**
@@ -29,6 +35,9 @@ impl Camera {
             z_near: 1.0,
             z_far: 1000.0,
             view_transformation: glm::Mat4::identity(),
+            left: glm::zero(),
+            up: glm::zero(),
+            front: glm::zero(),
         }
     }
 
@@ -50,13 +59,21 @@ impl Camera {
         // Create perspective matrix
         let perspective_matrix = glm::perspective( self.aspect_ratio, self.fov, self.z_near, self.z_far );
 
-        // Combine into view transformation and return
+        // Combine into view transformation
         self.view_transformation = perspective_matrix * rotation_matrix * translation_matrix;
+
+        // Calculate left, up, and front of camera
+        self.left = self.view_transformation.column(0).xyz().normalize();
+        self.up = self.view_transformation.column(1).xyz().normalize();
+        self.front = self.view_transformation.column(2).xyz().normalize();
+
+        // Return
         self
     }
 
     /**
-     * Any setter function.
+     * Main setter.
+     * Parameters can be left as "None", in which case they aren't updated.
      * If no parameters are defined, only updates the view transformation.
      */
     pub fn set_vars(
@@ -79,9 +96,9 @@ impl Camera {
     }
 
     /**
-     * Main setter.
+     * Sets view parameters.
      */
-    pub fn set_view_vars( &mut self, position: glm::Vec3, angle: glm::Vec3, field_of_view: f32, near_clipping_plane: f32, far_clipping_plane: f32 ) -> &Camera {
+    pub fn set_view_params( &mut self, position: glm::Vec3, angle: glm::Vec3, field_of_view: f32, near_clipping_plane: f32, far_clipping_plane: f32 ) -> &Camera {
         // Update variables
         self.pos = position;
         self.ang = angle;
@@ -93,10 +110,15 @@ impl Camera {
         self.calculate_view_transformation()
     }
 
-    /**
-     * Gets the camera's view transformation.
-     */
-    pub fn get_view_transformation( &self ) -> glm::Mat4 {
-        self.view_transformation
-    }
+    // --- Getters
+    pub fn pos( &self )                 -> glm::Vec3 { self.pos }
+    pub fn ang( &self )                 -> glm::Vec3 { self.ang }
+    pub fn fov( &self )                 -> f32 { self.fov }
+    pub fn z_near( &self )              -> f32 { self.z_near }
+    pub fn z_far( &self )               -> f32 { self.z_far }
+    pub fn view_transformation( &self ) -> glm::Mat4 { self.view_transformation }
+    pub fn left( &self )                -> glm::Vec3 { self.left }
+    pub fn front( &self )               -> glm::Vec3 { self.front }
+    pub fn up( &self )                  -> glm::Vec3 { self.up }
+
 }
