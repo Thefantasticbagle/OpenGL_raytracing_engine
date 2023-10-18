@@ -5,8 +5,11 @@ use std::sync::{Mutex, Arc, RwLock};
 use glutin::event::{Event, WindowEvent, DeviceEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self, *}};
 use glutin::event_loop::ControlFlow;
 
+extern crate nalgebra_glm as glm;
+
 mod util;
 mod shader;
+mod camera;
 
 // Initial window size
 const INITIAL_SCREEN_W: u32 = 720;
@@ -57,6 +60,16 @@ fn main() {
             //gl::DebugMessageCallback(Some(util::debug_callback), ptr::null());
         }
 
+        // Set up camera
+        let mut camera = camera::Camera::new();
+        camera.set_view_vars(
+            glm::zero(),
+            glm::zero(),
+            90.0,
+            1.0,
+            10.0,
+        );
+
         // Set up game objects
         let (vertices, indices) = util::create_triangle_triangle(8, 8);
         let my_vao = unsafe {util::create_vao(&vertices, &indices)};
@@ -70,15 +83,35 @@ fn main() {
         // ------------------------------------------ //
         // --------------- Gameloop ----------------- //
         // ------------------------------------------ //
+
+        // Start time
+        let ( time_start, mut time_prev ) = (
+            std::time::Instant::now(),
+            std::time::Instant::now()
+        );
+        
         loop {
+            // Elapsed and delta time
+            let time = std::time::Instant::now();
+            let ( time_elapsed, dt ) = (
+                time.duration_since( time_start ).as_secs_f32(),
+                time.duration_since(time_prev).as_secs_f32(),
+            );
+            time_prev = time;
+
             unsafe {
                 // Clear color and depth buffers
                 gl::ClearColor(0.04, 0.05, 0.09, 1.0);
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
-                // Draw game objects
+                // Physics updates
+                camera.set_vars(Some(glm::vec3(time_elapsed.sin(), 0.0, 0.0)), None, None, None, None);
+
+                // Apply shader and camera transformations
                 simple_shader.activate();
-                    
+                simple_shader.set_uniform_mat4( "view", camera.get_view_transformation() );
+                
+                // Draw
                 gl::BindVertexArray(my_vao);
                 gl::DrawElements(
                     gl::TRIANGLES, 
