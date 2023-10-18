@@ -214,4 +214,25 @@ impl Shader {
     pub unsafe fn activate( &self ) {
         gl::UseProgram( self.pid );
     }
+
+    /**
+     * Gets the location of a uniform variable in a shader.
+     * 
+     * @param pid The shader program id.
+     * @param name The name of the uniform variable.
+     * 
+     * @return The location of the uniform variable, or -1 if it does not exist.
+     */
+    unsafe fn get_uniform_location( &self, name: &str) -> gl::types::GLint {
+        let name_cstring = CString::new(name).unwrap();
+        let name_ptr: *const i8 = name_cstring.as_ptr() as *const i8;
+        return gl::GetUniformLocation(self.pid, name_ptr);
+    }
+
+    /**
+     * Sets a uniform mat4 in the shader.
+     */
+    pub unsafe fn set_uniform_mat4( &self, name: &str, value: glm::Mat4 ) {
+        gl::UniformMatrix4fv( self.get_uniform_location( name ), 1, gl::FALSE, value.as_ptr());
+    }
 }
