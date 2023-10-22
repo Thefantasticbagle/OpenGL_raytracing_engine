@@ -2,7 +2,7 @@
 use std::{ thread, ptr };
 use std::sync::{Mutex, Arc, RwLock};
 
-use glutin::event::{Event, WindowEvent, DeviceEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self, *}};
+use glutin::event::{Event, WindowEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self}};
 use glutin::event_loop::ControlFlow;
 
 extern crate nalgebra_glm as glm;
@@ -89,6 +89,31 @@ fn main() {
             shader::ShaderBuilder::new()
                 .attach_shader("shaders/simple.vert")
                 .attach_shader("shaders/simple.frag")
+                .link()
+        };
+
+        // Create SSBO with dummy data
+        #[allow(dead_code)]
+        struct Sphere {
+            pub pos: glm::Vec3,
+            pub radius: f32,
+        }
+
+        let spheres: Vec<Sphere> = vec![
+            Sphere {
+                pos: glm::vec3(0.0, 0.0, 0.0),
+                radius: 0.0,
+            },
+            Sphere {
+                pos: glm::vec3(0.0, 0.0, 0.0),
+                radius: 0.0,
+            },
+        ];
+
+        let mut ssbo = unsafe {
+            shader::SSBOBuilder::new()
+                .set_data( spheres )
+                .set_shader_details( simple_shader.pid, 2, "SphereBuffer" )
                 .link()
         };
 
@@ -179,7 +204,21 @@ fn main() {
                 // Apply shader and camera transformations
                 simple_shader.activate();
                 simple_shader.set_uniform_mat4( "view", camera.view_transformation() );
-                
+
+                // Update the contents of the SSBO
+                let spheres_update: Vec<Sphere> = vec![
+                    Sphere {
+                        pos: glm::vec3(time_elapsed.sin()/2.0 + 0.5, time_elapsed.cos()/2.0 + 0.5, 0.0),
+                        radius: 1.0,
+                    },
+                    Sphere {
+                        pos: glm::vec3(time_elapsed.cos()/2.0 + 0.5, time_elapsed.sin()/2.0 + 0.5, 0.0),
+                        radius: 1.0,
+                    },
+                ];
+
+                ssbo.update_data(spheres_update);
+
                 // Draw
                 gl::BindVertexArray(my_vao);
                 gl::DrawElements(

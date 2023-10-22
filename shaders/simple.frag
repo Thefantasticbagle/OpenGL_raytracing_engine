@@ -2,7 +2,17 @@
 
 out vec4 color;
 
+struct Sphere {
+    vec3 pos;
+    float radius;
+};
+
+layout (std430, binding=2) buffer SphereBuffer
+{
+    Sphere spheres[];
+};
+
 void main()
 {
-    color = vec4(1.0f, 0.0f, 0.0f, 1.0f);
+    color = vec4(spheres[0].pos, 1.0);
 }

@@ -6,6 +6,8 @@ use std::{
     path::Path,
 };
 
+use crate::util::{byte_size_of_array, pointer_to_array};
+
 /**
  * Struct for a compiled shader program.
  */
@@ -234,5 +236,150 @@ impl Shader {
      */
     pub unsafe fn set_uniform_mat4( &self, name: &str, value: glm::Mat4 ) {
         gl::UniformMatrix4fv( self.get_uniform_location( name ), 1, gl::FALSE, value.as_ptr());
+    }
+}
+
+/**
+ * SSBO - Shader Storage Buffer Object. Can store at least 128MB.
+ * https://www.khronos.org/opengl/wiki/Shader_Storage_Buffer_Object.
+ */
+#[allow(dead_code)]
+pub struct SSBO<T> {
+    pid: u32,
+    bid: u32,
+    binding: u32,
+    data: Vec<T>,
+    data_size: isize,
+}
+
+/**
+ * SSBO builder.
+ * @see SSBO
+ */
+pub struct SSBOBuilder<T> {
+    pid: u32,
+    bid: u32,
+    binding: u32,
+    data: Vec<T>,
+}
+
+/**
+ * SSBO builder functions.
+ */
+impl<T> SSBOBuilder<T> {
+    /**
+     * Creates an empty SSBO object.
+     * Initializes its buffer.
+     */
+    #[must_use = "The SSBO must be initialized."]
+    pub unsafe fn new() -> SSBOBuilder<T> {
+        let mut buffer_id: gl::types::GLuint = 0;
+        gl::GenBuffers(1, &mut buffer_id);
+
+        SSBOBuilder {
+            pid: 0,
+            bid: buffer_id,
+            binding: 0,
+            data: Vec::new(),
+        }
+    }
+
+    /**
+     * Sets the data of the SSBO.
+     * The SSBO object must be initialized through the new() method.
+     * 
+     * @param data The data.
+     */
+    #[must_use = "The SSBO must have data to be initialized."]
+    pub unsafe fn set_data( self, data: Vec<T> ) -> SSBOBuilder<T> {
+        //let data = &data[..];
+
+        // Get data size and pointer reference
+        let ( data_size, data_ref ) = (
+            byte_size_of_array( &data ),
+            pointer_to_array( &data ),
+        );
+
+        // Set buffer data
+        gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, self.bid);
+        gl::BufferData(gl::SHADER_STORAGE_BUFFER, data_size, data_ref, gl::DYNAMIC_COPY);
+        gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
+
+        // Return
+        self
+    }
+
+    /**
+     * Sets the shader details for the SSBO.
+     * 
+     * @param shader_pid The program ID of the compiled shader which uses the SSBO.
+     * @param shader_binding The binding number of the SSBO within the shader.
+     * @param shader_buffer_name The name of the SSBO/buffer within the shader.
+     */
+    #[must_use = "The SSBO must contain details about the shader it is used in to function."]
+    pub unsafe fn set_shader_details( mut self, shader_pid: u32, shader_binding: u32, shader_buffer_name: &str ) -> SSBOBuilder<T> {
+        // Set vars
+        self.pid = shader_pid;
+        self.binding = shader_binding;
+        
+        // Find block index and connect to it
+        let name_c_str = CString::new( shader_buffer_name ).unwrap();
+        let block_index: gl::types::GLuint = gl::GetProgramResourceIndex(
+            shader_pid,
+            gl::SHADER_STORAGE_BLOCK,
+            name_c_str.as_ptr() as *const i8
+        );
+        
+        gl::ShaderStorageBlockBinding( shader_pid, block_index, shader_binding );
+        gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, shader_binding, self.bid);
+
+        // Return
+        self
+    }
+
+    /**
+     * Links the SSBO, finalizing it.
+     * The data can be changed, but the total size of the new data cannot be greater than the original data's size.
+     * 
+     * @return The fully initialized SSBO object.
+     */
+    #[must_use = "The SSBO must be linked to a shader or it is useless."]
+    pub unsafe fn link ( self ) -> SSBO<T> {
+        SSBO {
+            pid: self.pid,
+            bid: self.bid,
+            binding: self.binding,
+            data: self.data,
+            data_size: 0,//byte_size_of_array( &self.data ),
+        }
+    }
+}
+
+/**
+ * SSBO functions.
+ */
+impl<T> SSBO<T> {
+    /**
+     * Updates the data in the SSBO.
+     * The new data size cannot exceed the original data size.
+     * 
+     * @param new_data The new data.
+     */
+    pub unsafe fn update_data( &mut self, new_data: Vec<T> ) -> &SSBO<T> {
+        // Get data size and ref
+        let ( new_data_size, new_data_ref ) = (
+            byte_size_of_array( &new_data ),
+            pointer_to_array( &new_data ),
+        );
+
+        // Copy new data into buffer
+        gl::BindBuffer( gl::SHADER_STORAGE_BUFFER, self.bid );
+        let p = gl::MapBuffer( gl::SHADER_STORAGE_BUFFER, gl::WRITE_ONLY );
+        p.copy_from( new_data_ref, new_data_size as usize );
+        gl::UnmapBuffer(gl::SHADER_STORAGE_BUFFER);
+        gl::BindBuffer( gl::SHADER_STORAGE_BUFFER, 0 );
+
+        // Return
+        self
     }
 }
