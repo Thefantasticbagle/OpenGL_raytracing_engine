@@ -4,12 +4,14 @@ use std::sync::{Mutex, Arc, RwLock};
 
 use glutin::event::{Event, WindowEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self}};
 use glutin::event_loop::ControlFlow;
+use raytracing::{RTSphere, RTMaterial, RTSettings};
 
 extern crate nalgebra_glm as glm;
 
 mod util;
 mod shader;
 mod camera;
+mod raytracing;
 
 // Initial window size
 const INITIAL_SCREEN_W: u32 = 720;
@@ -87,33 +89,51 @@ fn main() {
         let my_vao = unsafe {util::create_vao(&vertices, &indices)};
         let simple_shader = unsafe {
             shader::ShaderBuilder::new()
-                .attach_shader("shaders/simple.vert")
-                .attach_shader("shaders/simple.frag")
+                .attach_shader("shaders/raytracing.vert")
+                .attach_shader("shaders/raytracing.frag")
                 .link()
         };
 
-        // Create SSBO with dummy data
-        #[allow(dead_code)]
-        struct Sphere {
-            pub pos: glm::Vec3,
-            pub radius: f32,
+        // Set shader settings
+        let settings = RTSettings {
+            max_bounces: 4,
+            rays_per_frag: 16,
+            diverge_strength: 0.03,
+            focus_distance: 1.0,
+        };
+
+        unsafe {
+            settings.send_uniform( &simple_shader, "settings" );
         }
 
-        let spheres: Vec<Sphere> = vec![
-            Sphere {
-                pos: glm::vec3(0.0, 0.0, 0.0),
-                radius: 0.0,
+        // Create SSBO for spheres
+        let spheres = vec![
+            RTSphere {
+                center: glm::vec3(1.0, 1.0, 1.0),
+                radius: 1.0,
+                material: RTMaterial {
+                    color: glm::vec4(1.0, 1.0, 1.0, 1.0),
+                    emission_color: glm::vec4(1.0, 1.0, 1.0, 0.5),
+                    specular_color: glm::vec4(1.0, 1.0, 1.0, 0.5),
+                    smoothness: 0.5,
+                }
             },
-            Sphere {
-                pos: glm::vec3(0.0, 0.0, 0.0),
-                radius: 0.0,
+            RTSphere {
+                center: glm::vec3(1.0, 0.0, 1.0),
+                radius: 1.0,
+                material: RTMaterial {
+                    color: glm::vec4(1.0, 1.0, 0.0, 1.0),
+                    emission_color: glm::vec4(1.0, 1.0, 0.0, 0.5),
+                    specular_color: glm::vec4(0.0, 1.0, 1.0, 0.5),
+                    smoothness: 0.5,
+                }
             },
         ];
 
-        let mut ssbo = unsafe {
+        let ssbo = unsafe {
             shader::SSBOBuilder::new()
                 .set_data( spheres )
-                .set_shader_details( simple_shader.pid, 2, "SphereBuffer" )
+                .set_shader_details( simple_shader.pid, 0, "MaterialBuffer" )
                 .link()
         };
 
@@ -204,20 +224,6 @@ fn main() {
                 // Apply shader and camera transformations
                 simple_shader.activate();
                 simple_shader.set_uniform_mat4( "view", camera.view_transformation() );
-
-                // Update the contents of the SSBO
-                let spheres_update: Vec<Sphere> = vec![
-                    Sphere {
-                        pos: glm::vec3(time_elapsed.sin()/2.0 + 0.5, time_elapsed.cos()/2.0 + 0.5, 0.0),
-                        radius: 1.0,
-                    },
-                    Sphere {
-                        pos: glm::vec3(time_elapsed.cos()/2.0 + 0.5, time_elapsed.sin()/2.0 + 0.5, 0.0),
-                        radius: 1.0,
-                    },
-                ];
-
-                ssbo.update_data(spheres_update);
 
                 // Draw
                 gl::BindVertexArray(my_vao);

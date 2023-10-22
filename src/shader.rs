@@ -225,7 +225,7 @@ impl Shader {
      * 
      * @return The location of the uniform variable, or -1 if it does not exist.
      */
-    unsafe fn get_uniform_location( &self, name: &str) -> gl::types::GLint {
+    pub unsafe fn get_uniform_location( &self, name: &str) -> gl::types::GLint {
         let name_cstring = CString::new(name).unwrap();
         let name_ptr: *const i8 = name_cstring.as_ptr() as *const i8;
         return gl::GetUniformLocation(self.pid, name_ptr);
