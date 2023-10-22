@@ -22,6 +22,7 @@ pub struct Camera {
 /**
  * Camera functions.
  */
+#[allow(dead_code)]
 impl Camera {
     /**
      * Constructor.

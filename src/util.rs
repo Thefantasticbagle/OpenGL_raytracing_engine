@@ -1,5 +1,4 @@
-
-use std::{ mem, ptr, os::raw::c_void };
+use std::{ mem, os::raw::c_void, ffi::CString };
 
 
 /**
@@ -37,6 +36,17 @@ pub fn size_of<T>() -> i32 {
  */
 pub fn offset<T>(n: u32) -> *const c_void {
     (n * mem::size_of::<T>() as u32) as *const T as *const c_void
+}
+
+/**
+ * Casts a rust string into C's i8 array.
+ * 
+ * @param s The string.
+ * @return The string, casted to C's version (i8 array).
+ */
+pub fn str_as_i8(s: &str) -> *const i8 {
+    let c_str = CString::new( s ).unwrap();
+    c_str.as_ptr() as *const i8
 }
 
 /**
