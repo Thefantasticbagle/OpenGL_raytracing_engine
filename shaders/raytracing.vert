@@ -2,9 +2,7 @@
 
 in vec3 position;
 
-uniform mat4 view;
-
-void main()
-{
-    gl_Position = view * vec4(position, 1.0f);
+// The main function
+void main() {
+    gl_Position = vec4(position, 1.0f);
 }

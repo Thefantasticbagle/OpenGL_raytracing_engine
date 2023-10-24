@@ -4,7 +4,7 @@ use std::sync::{Mutex, Arc, RwLock};
 
 use glutin::event::{Event, WindowEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self}};
 use glutin::event_loop::ControlFlow;
-use raytracing::{RTSphere, RTMaterial, RTSettings};
+use raytracing::{RTSphere, RTMaterial, RTSettings, RTCamera};
 
 extern crate nalgebra_glm as glm;
 
@@ -85,7 +85,7 @@ fn main() {
         );
 
         // Set up game objects
-        let (vertices, indices) = util::create_triangle_triangle(8, 8);
+        let (vertices, indices) = util::create_billboard();
         let my_vao = unsafe {util::create_vao(&vertices, &indices)};
         let simple_shader = unsafe {
             shader::ShaderBuilder::new()
@@ -99,7 +99,6 @@ fn main() {
             max_bounces: 4,
             rays_per_frag: 16,
             diverge_strength: 0.03,
-            focus_distance: 1.0,
         };
 
         unsafe {
@@ -107,35 +106,22 @@ fn main() {
         }
 
         // Create SSBO for spheres
-        let spheres = vec![
-            RTSphere {
-                center: glm::vec3(1.0, 1.0, 1.0),
-                radius: 1.0,
-                material: RTMaterial {
-                    color: glm::vec4(1.0, 1.0, 1.0, 1.0),
-                    emission_color: glm::vec4(1.0, 1.0, 1.0, 0.5),
-                    specular_color: glm::vec4(1.0, 1.0, 1.0, 0.5),
-                    smoothness: 0.5,
-                }
-            },
-            RTSphere {
-                center: glm::vec3(1.0, 0.0, 1.0),
-                radius: 1.0,
-                material: RTMaterial {
-                    color: glm::vec4(1.0, 1.0, 0.0, 1.0),
-                    emission_color: glm::vec4(1.0, 1.0, 0.0, 0.5),
-                    specular_color: glm::vec4(0.0, 1.0, 1.0, 0.5),
-                    smoothness: 0.5,
-                }
-            },
-        ];
+        // For now the data is left blank, as it is immidiately overwritten in the gameloop.
+        // However, the amount of objects must be the same so the correct amount of space is reserved.
+        let spheres_count = 5;
+        let mut spheres = Vec::new();
+        for _ in 0..spheres_count {
+            spheres.push( RTSphere::new() )
+        }
 
-        let ssbo = unsafe {
+        let mut ssbo = unsafe {
             shader::SSBOBuilder::new()
                 .set_data( spheres )
                 .set_shader_details( simple_shader.pid, 0, "MaterialBuffer" )
                 .link()
         };
+
+        
 
         // ------------------------------------------ //
         // --------------- Gameloop ----------------- //
@@ -157,6 +143,7 @@ fn main() {
             time_prev = time;
 
             // TODO: Resize events
+            let ( mut screen_width, mut screen_height ) = ( INITIAL_SCREEN_W, INITIAL_SCREEN_H );
 
             // --- Key events
             let ( mut movement, mut rotation ) = ( glm::Vec3::zeros(), glm::Vec3::zeros() );
@@ -212,7 +199,10 @@ fn main() {
                 gl::ClearColor(0.04, 0.05, 0.09, 1.0);
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
-                // Physics updates
+                // Activate shader
+                simple_shader.activate();
+
+                // Update camera with player movement
                 camera.set_vars(
                     Some( camera.pos() + movement ),
                     Some( camera.ang() + rotation ),
@@ -221,9 +211,73 @@ fn main() {
                     None
                 );
 
-                // Apply shader and camera transformations
-                simple_shader.activate();
-                simple_shader.set_uniform_mat4( "view", camera.view_transformation() );
+                // Create RTCamera and pass to shader
+                // This camera is a lot like the normal Camera, but only carries the necessary variables for the shader to use
+                let rtcamera = RTCamera {
+                    screen_size: glm::vec2( screen_width as f32, screen_height as f32 ),
+                    fov: 60.0,
+                    focus_distance: 1.0,
+                    pos: camera.pos(),
+                    local_to_world: camera.rts(),
+                };
+                rtcamera.send_uniform( &simple_shader, "camera" );
+
+                // Update sphere objects
+                ssbo.update_data(
+                    vec![
+                        RTSphere {
+                            center: glm::vec3((time_elapsed*0.5).sin() * 100.0 , time_elapsed.cos() * 100.0, 0.0),
+                            radius: 50.0,
+                            material: RTMaterial {
+                                color: glm::vec4(1.0, 0.7, 0.3, 0.0),
+                                emission_color: glm::vec4(1.0, 0.7, 0.3, 1.0),
+                                specular_color: glm::vec4(1.0, 1.0, 1.0, 0.0),
+                                smoothness: 0.5,
+                            }
+                        },
+                        RTSphere {
+                            center: glm::vec3(0.0, 0.0, 0.0),
+                            radius: 2.0,
+                            material: RTMaterial {
+                                color: glm::vec4(1.0, 1.0, 1.0, 1.0),
+                                emission_color: glm::vec4(1.0, 1.0, 0.0, 0.0),
+                                specular_color: glm::vec4(1.0, 1.0, 1.0, 0.2),
+                                smoothness: 0.3,
+                            }
+                        },
+                        RTSphere {
+                            center: glm::vec3(0.0, 0.0, 3.0),
+                            radius: 1.0,
+                            material: RTMaterial {
+                                color: glm::vec4(1.0, 0.0, 0.0, 1.0),
+                                emission_color: glm::vec4(1.0, 0.0, 0.0, 1.0),
+                                specular_color: glm::vec4(1.0, 0.0, 0.0, 0.2),
+                                smoothness: 0.3,
+                            }
+                        },
+                        RTSphere {
+                            center: glm::vec3(3.0, 0.0, 0.0),
+                            radius: 2.0,
+                            material: RTMaterial {
+                                color: glm::vec4(0.0, 1.0, 0.0, 1.0),
+                                emission_color: glm::vec4(0.0, 1.0, 0.0, 1.0),
+                                specular_color: glm::vec4(0.0, 1.0, 0.0, 0.2),
+                                smoothness: 0.3,
+                            }
+                        },
+                        RTSphere {
+                            center: glm::vec3(2.5, -0.5, 2.5),
+                            radius: 2.0,
+                            material: RTMaterial {
+                                color: glm::vec4(0.0, 0.0, 1.0, 1.0),
+                                emission_color: glm::vec4(0.0, 0.0, 1.0, 0.6),
+                                specular_color: glm::vec4(0.0, 1.0, 1.0, 0.5),
+                                smoothness: 0.6,
+                            }
+                        },
+                    ]
+                );
+                gl::Uniform1i( simple_shader.get_uniform_location( "spheresCount" ), spheres_count as i32);
 
                 // Draw
                 gl::BindVertexArray(my_vao);

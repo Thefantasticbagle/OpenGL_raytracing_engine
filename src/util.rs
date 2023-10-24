@@ -146,3 +146,24 @@ pub fn create_triangle_triangle(triangle_width: i32, triangle_height: i32) -> (V
 
     (vertices, indices)
 }
+
+/**
+ * Creates the vertices and indices for a simple billboard which covers the entire screen.
+ * 
+ * @return Vertices and Indices as a vector of float32s and unsigned int32s, respectively.
+ */
+pub fn create_billboard( ) -> (Vec<f32>, Vec<u32>) {
+    let vertices: Vec<f32> = vec![
+        1.0, 1.0, 0.0,
+        -1.0, 1.0, 0.0,
+        -1.0, -1.0, 0.0,
+        1.0, -1.0, 0.0,
+    ];
+
+    let indices: Vec<u32> = vec![
+        0, 1, 3,
+        1, 2, 3,
+    ];
+
+    (vertices, indices)
+}

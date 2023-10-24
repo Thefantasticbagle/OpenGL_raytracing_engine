@@ -5,7 +5,6 @@ extern crate nalgebra_glm as glm;
  */
 pub struct Camera {
     // Set properties
-    aspect_ratio: f32,
     pos: glm::Vec3,
     ang: glm::Vec3,
     fov: f32,
@@ -13,7 +12,7 @@ pub struct Camera {
     z_far: f32,
 
     // Calculated properties
-    view_transformation: glm::Mat4,
+    rts: glm::Mat4,
     left: glm::Vec3,
     up: glm::Vec3,
     front: glm::Vec3,
@@ -29,13 +28,12 @@ impl Camera {
      */
     pub fn new() -> Camera {
         Camera {
-            aspect_ratio: 16.0 / 9.0,
             pos: glm::zero(),
             ang: glm::zero(),
             fov: 90.0,
             z_near: 1.0,
             z_far: 1000.0,
-            view_transformation: glm::Mat4::identity(),
+            rts: glm::Mat4::identity(),
             left: glm::zero(),
             up: glm::zero(),
             front: glm::zero(),
@@ -43,11 +41,13 @@ impl Camera {
     }
 
     /**
-     * Calculates the view transformation of the camera and sets it.
+     * Calculates the RTS of the camera.
+     * Unlike the view transformation, this is not meant to transform the world around the camera. It's the camera's transformation relative to the world.
+     * (view_transformation was removed as it is not required for raytracing, the transformations in raytracing are not necessarily affine.)
      */
-    fn calculate_view_transformation( &mut self ) -> &Camera {
+    fn calculate_rts( &mut self ) -> &Camera {
         // Create translation matrix
-        let translation_matrix = glm::translation( &(glm::vec3(0.0,0.0,-5.0) - self.pos) );
+        let translation_matrix = glm::translation( &self.pos );
 
         // Create rotation matrix
         let ( rotation_x, rotation_y, rotation_z ) = (
@@ -56,17 +56,17 @@ impl Camera {
             glm::rotation(self.ang.z, &glm::vec3(0.0, 0.0, 1.0)),
         );
         let rotation_matrix = rotation_y * rotation_x * rotation_z;
-        
-        // Create perspective matrix
-        let perspective_matrix = glm::perspective( self.aspect_ratio, self.fov, self.z_near, self.z_far );
 
-        // Combine into view transformation
-        self.view_transformation = perspective_matrix * rotation_matrix * translation_matrix;
+        // Create scaling matrix
+        let scale_matrix = glm::scaling( &glm::vec3(1.0, 1.0, 1.0) );
+
+        // Combine into RTS
+        self.rts = scale_matrix * translation_matrix * rotation_matrix;
 
         // Calculate left, up, and front of camera
-        self.left = self.view_transformation.column(0).xyz().normalize();
-        self.up = self.view_transformation.column(1).xyz().normalize();
-        self.front = self.view_transformation.column(2).xyz().normalize();
+        self.left = self.rts.column(0).xyz().normalize();
+        self.up = self.rts.column(1).xyz().normalize();
+        self.front = self.rts.column(2).xyz().normalize();
 
         // Return
         self
@@ -92,8 +92,8 @@ impl Camera {
         if let Some(near_clipping_plane_defined) = near_clipping_plane { self.z_near = near_clipping_plane_defined; }
         if let Some(far_clipping_plane_defined) = far_clipping_plane { self.z_far = far_clipping_plane_defined; }
     
-        // Update view transformation and return
-        self.calculate_view_transformation()
+        // Update RTS and return
+        self.calculate_rts()
     }
 
     /**
@@ -107,19 +107,19 @@ impl Camera {
         self.z_near = near_clipping_plane;
         self.z_far = far_clipping_plane;
 
-        // Update view transformation and return
-        self.calculate_view_transformation()
+        // Update RTS and return
+        self.calculate_rts()
     }
 
     // --- Getters
-    pub fn pos( &self )                 -> glm::Vec3 { self.pos }
-    pub fn ang( &self )                 -> glm::Vec3 { self.ang }
-    pub fn fov( &self )                 -> f32 { self.fov }
-    pub fn z_near( &self )              -> f32 { self.z_near }
-    pub fn z_far( &self )               -> f32 { self.z_far }
-    pub fn view_transformation( &self ) -> glm::Mat4 { self.view_transformation }
-    pub fn left( &self )                -> glm::Vec3 { self.left }
-    pub fn front( &self )               -> glm::Vec3 { self.front }
-    pub fn up( &self )                  -> glm::Vec3 { self.up }
+    pub fn pos( &self )     -> glm::Vec3 { self.pos }
+    pub fn ang( &self )     -> glm::Vec3 { self.ang }
+    pub fn fov( &self )     -> f32 { self.fov }
+    pub fn z_near( &self )  -> f32 { self.z_near }
+    pub fn z_far( &self )   -> f32 { self.z_far }
+    pub fn rts( &self )     -> glm::Mat4 { self.rts }
+    pub fn left( &self )    -> glm::Vec3 { self.left }
+    pub fn front( &self )   -> glm::Vec3 { self.front }
+    pub fn up( &self )      -> glm::Vec3 { self.up }
 
 }
