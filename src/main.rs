@@ -4,7 +4,7 @@ use std::sync::{Mutex, Arc, RwLock};
 
 use glutin::event::{Event, WindowEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self}};
 use glutin::event_loop::ControlFlow;
-use raytracing::{RTSphere, RTMaterial, RTSettings, RTCamera};
+use raytracing::{RTSphere, RTMaterial, RTSettings, RTCamera, RTTriangle};
 
 extern crate nalgebra_glm as glm;
 
@@ -96,9 +96,9 @@ fn main() {
 
         // Set shader settings
         let settings = RTSettings {
-            max_bounces: 4,
+            max_bounces: 6,
             rays_per_frag: 16,
-            diverge_strength: 0.03,
+            diverge_strength: 0.07,
         };
 
         unsafe {
@@ -108,20 +108,59 @@ fn main() {
         // Create SSBO for spheres
         // For now the data is left blank, as it is immidiately overwritten in the gameloop.
         // However, the amount of objects must be the same so the correct amount of space is reserved.
-        let spheres_count = 5;
+        let spheres_count = 4;
         let mut spheres = Vec::new();
         for _ in 0..spheres_count {
             spheres.push( RTSphere::new() )
         }
 
-        let mut ssbo = unsafe {
+        let mut ssbo_spheres = unsafe {
             shader::SSBOBuilder::new()
                 .set_data( spheres )
-                .set_shader_details( simple_shader.pid, 0, "MaterialBuffer" )
+                .set_shader_details( simple_shader.pid, 0, "SphereBuffer" )
                 .link()
         };
 
+        // Create SSBO for triangles
+        let triangles = vec![
+            RTTriangle {
+                p0:  glm::vec3( 0.0, -3.0, 3.0).into(),
+                p1: glm::vec3( 10.0, -3.0, 3.0).into(),
+                p2: glm::vec3( 0.0, 7.0, 3.0).into(),
+                normal0: glm::vec3( 0.0, 1.0, 0.0 ).into(),
+                normal1: glm::vec3( 0.0, 1.0, 0.0 ).into(),
+                normal2: glm::vec3( 0.0, 1.0, 0.0 ).into(),
+                material: RTMaterial {
+                    color: glm::vec4( 1.0, 0.0, 0.3, 1.0 ),
+                    emission_color: glm::vec4( 1.0, 0.0, 0.3, 0.3 ),
+                    specular_color: glm::vec4( 1.0, 1.0, 1.0, 0.0 ),
+                    smoothness: 0.0,
+                }
+            },
+
+            RTTriangle {
+                p0:  glm::vec3( 0.0, -3.0, 0.0).into(),
+                p1: glm::vec3( 10.0, -3.0, 0.0).into(),
+                p2: glm::vec3( 0.0, 7.0, 0.0).into(),
+                normal0: glm::vec3( 0.0, 0.0, 1.0 ).into(),
+                normal1: glm::vec3( 0.0, 0.0, 1.0 ).into(),
+                normal2: glm::vec3( 0.0, 1.0, 1.0 ).into(),
+                material: RTMaterial {
+                    color: glm::vec4( 1.0, 1.0, 1.0, 1.0 ),
+                    emission_color: glm::vec4( 1.0, 0.0, 0.0, 0.0 ),
+                    specular_color: glm::vec4( 1.0, 0.0, 0.0, 0.0 ),
+                    smoothness: 0.0,
+                }
+            },
+        ];
+        let triangles_count = triangles.len();
         
+        let ssbo_triangles = unsafe {
+            shader::SSBOBuilder::new()
+                .set_data( triangles )
+                .set_shader_details( simple_shader.pid, 1, "TriangleBuffer" )
+                .link()
+        };
 
         // ------------------------------------------ //
         // --------------- Gameloop ----------------- //
@@ -217,67 +256,58 @@ fn main() {
                     screen_size: glm::vec2( screen_width as f32, screen_height as f32 ),
                     fov: 60.0,
                     focus_distance: 1.0,
-                    pos: camera.pos(),
+                    pos: camera.pos().into(),
                     local_to_world: camera.rts(),
                 };
                 rtcamera.send_uniform( &simple_shader, "camera" );
 
                 // Update sphere objects
-                ssbo.update_data(
+                ssbo_spheres.update_data(
                     vec![
                         RTSphere {
-                            center: glm::vec3((time_elapsed*0.5).sin() * 100.0 , time_elapsed.cos() * 100.0, 0.0),
                             radius: 50.0,
+                            center: glm::vec3((time_elapsed*0.5).sin() * 100.0 , time_elapsed.cos() * 100.0, 0.0).into(),
                             material: RTMaterial {
-                                color: glm::vec4(1.0, 0.7, 0.3, 0.0),
+                                color: glm::vec4(1.0, 0.7, 0.3, 1.0),
                                 emission_color: glm::vec4(1.0, 0.7, 0.3, 1.0),
                                 specular_color: glm::vec4(1.0, 1.0, 1.0, 0.0),
                                 smoothness: 0.5,
                             }
                         },
                         RTSphere {
-                            center: glm::vec3(0.0, 0.0, 0.0),
-                            radius: 2.0,
+                            radius: 150.0,
+                            center: glm::vec3(0.0, -150.0, 0.0).into(),
                             material: RTMaterial {
                                 color: glm::vec4(1.0, 1.0, 1.0, 1.0),
-                                emission_color: glm::vec4(1.0, 1.0, 0.0, 0.0),
-                                specular_color: glm::vec4(1.0, 1.0, 1.0, 0.2),
+                                emission_color: glm::vec4(1.0, 1.0, 1.0, 0.0),
+                                specular_color: glm::vec4(1.0, 0.0, 0.0, 0.0),
                                 smoothness: 0.3,
                             }
                         },
                         RTSphere {
-                            center: glm::vec3(0.0, 0.0, 3.0),
                             radius: 1.0,
-                            material: RTMaterial {
-                                color: glm::vec4(1.0, 0.0, 0.0, 1.0),
-                                emission_color: glm::vec4(1.0, 0.0, 0.0, 1.0),
-                                specular_color: glm::vec4(1.0, 0.0, 0.0, 0.2),
-                                smoothness: 0.3,
-                            }
-                        },
-                        RTSphere {
-                            center: glm::vec3(3.0, 0.0, 0.0),
-                            radius: 2.0,
-                            material: RTMaterial {
-                                color: glm::vec4(0.0, 1.0, 0.0, 1.0),
-                                emission_color: glm::vec4(0.0, 1.0, 0.0, 1.0),
-                                specular_color: glm::vec4(0.0, 1.0, 0.0, 0.2),
-                                smoothness: 0.3,
-                            }
-                        },
-                        RTSphere {
-                            center: glm::vec3(2.5, -0.5, 2.5),
-                            radius: 2.0,
+                            center: glm::vec3(3.0, 1.25, 0.0).into(),
                             material: RTMaterial {
                                 color: glm::vec4(0.0, 0.0, 1.0, 1.0),
-                                emission_color: glm::vec4(0.0, 0.0, 1.0, 0.6),
-                                specular_color: glm::vec4(0.0, 1.0, 1.0, 0.5),
-                                smoothness: 0.6,
+                                emission_color: glm::vec4(0.0, 0.0, 1.0, 1.0),
+                                specular_color: glm::vec4(0.0, 1.0, 1.0, 0.0),
+                                smoothness: 0.3,
+                            }
+                        },
+                        RTSphere {
+                            radius: 2.0,
+                            center: glm::vec3(2.5, -0.5, 2.5).into(),
+                            material: RTMaterial {
+                                color: glm::vec4(1.0, 1.0, 1.0, 1.0),
+                                emission_color: glm::vec4(0.0, 0.0, 1.0, 0.0),
+                                specular_color: glm::vec4(0.0, 1.0, 1.0, 1.0),
+                                smoothness: 1.0,
                             }
                         },
                     ]
                 );
                 gl::Uniform1i( simple_shader.get_uniform_location( "spheresCount" ), spheres_count as i32);
+                gl::Uniform1i( simple_shader.get_uniform_location( "trianglesCount" ), triangles_count as i32);
 
                 // Draw
                 gl::BindVertexArray(my_vao);

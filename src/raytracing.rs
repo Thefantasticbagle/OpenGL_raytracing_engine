@@ -1,9 +1,42 @@
 use crate::shader::Shader;
 
+/**
+ * Vec3 for GLSL, put after normal floats.
+ * Since GLSL std140/430 causes misalignment with vec3s, I had to make this abomination...
+ * https://www.khronos.org/opengl/wiki/Interface_Block_(GLSL)#Memory_layout
+ * https://stackoverflow.com/questions/38172696/should-i-ever-use-a-vec3-inside-of-a-uniform-buffer-or-shader-storage-buffer-o
+ */
+#[repr(C, align(16))]
+pub struct Vec3a16 {
+    pub x: f32,
+        y: f32,
+        z: f32,
+}
+
+/**
+ * Conversion glm::vec3 -> Vec3a16.
+ * Use glm::vec3::into() to invoke.
+ */
+impl From<glm::Vec3> for Vec3a16 {
+    fn from(v: glm::Vec3) -> Vec3a16 {
+        Vec3a16 { x: v.x, y: v.y, z: v.z }
+    }
+}
+
+/**
+ * Conversion Vec3a16 -> glm::vec3.
+ * Use Vec3a16::into() to invoke.
+ */
+impl From<Vec3a16> for glm::Vec3 {
+    fn from(v: Vec3a16) -> glm::Vec3 {
+        glm::vec3(v.x, v.y, v.z)
+    }
+}
 
 /**
  * Struct for storing raytracing settings.
  */
+#[repr(C, align(16))]
 pub struct RTSettings {
     pub max_bounces: u32,
     pub rays_per_frag: u32,
@@ -39,7 +72,7 @@ impl RTSettings {
 /**
  * Struct for a raytracing material.
  */
-#[repr(C, align(16))] // requirement for the std(140/430) standard, see https://www.khronos.org/opengl/wiki/Interface_Block_(GLSL)#Memory_layout.
+#[repr(C, align(16))]
 pub struct RTMaterial {
     pub color: glm::Vec4,
     pub emission_color: glm::Vec4,
@@ -62,10 +95,10 @@ impl RTMaterial {
 /**
  * Struct for a raytraced sphere.
  */
-#[repr(C, align(16))] // requirement for the std(140/430) standard, see https://www.khronos.org/opengl/wiki/Interface_Block_(GLSL)#Memory_layout.
+#[repr(C, align(16))]
 pub struct RTSphere {
-    pub center: glm::Vec3,
     pub radius: f32,
+    pub center: Vec3a16,
     pub material: RTMaterial,
 }
 
@@ -77,7 +110,39 @@ impl RTSphere {
      * Creates a new, blank, RTSphere.
      */
     pub fn new() -> RTSphere {
-        RTSphere { center: glm::zero(), radius: 1.0, material: RTMaterial::new() }
+        RTSphere { radius: 0.0, center: glm::vec3(0.0, 0.0, 0.0).into(), material: RTMaterial::new() }
+    }
+}
+
+// RTTriangle
+#[repr(C, align(16))]
+pub struct RTTriangle {
+    pub p0: Vec3a16,
+    pub p1: Vec3a16,
+    pub p2: Vec3a16,
+    pub normal0: Vec3a16,
+    pub normal1: Vec3a16,
+    pub normal2: Vec3a16,
+    pub material: RTMaterial,
+}
+
+/**
+ * RTTriangle functions.
+ */
+impl RTTriangle {
+    /**
+     * Creates a new, blank, RTTriangle.
+     */
+    pub fn new() -> RTTriangle {
+        RTTriangle { 
+            p0: glm::Vec3::zeros().into(), 
+            p1: glm::Vec3::zeros().into(), 
+            p2: glm::Vec3::zeros().into(), 
+            normal0: glm::Vec3::zeros().into(), 
+            normal1: glm::Vec3::zeros().into(), 
+            normal2: glm::Vec3::zeros().into(), 
+            material: RTMaterial::new(),
+        }
     }
 }
 
@@ -89,7 +154,7 @@ pub struct RTCamera {
     pub screen_size: glm::Vec2,
     pub fov: f32,
     pub focus_distance: f32,
-    pub pos: glm::Vec3,
+    pub pos: Vec3a16,
     pub local_to_world: glm::Mat4,
 }
 

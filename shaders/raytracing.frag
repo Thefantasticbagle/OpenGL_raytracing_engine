@@ -6,6 +6,8 @@
 // --- Constants ---
 const float PI = 3.1415926;
 const vec3  sunPosition = vec3(0, 0, 0);
+const bool  CULL_FACE = false;
+const float kEpsilion = 0.01;
 
 // --- Structs ---
 
@@ -35,9 +37,20 @@ struct Material {
 
 // RTSphere
 struct Sphere {
-    vec3 center;
     float radius;
+    vec3 center;
     Material material;
+};
+
+// RTTriangle
+struct Triangle {
+    vec3        p0,
+                p1,
+                p2,
+                normal0,
+                normal1,
+                normal2;
+    Material    material;
 };
 
 // Hit information
@@ -61,11 +74,18 @@ out vec4 color;
 uniform Settings settings;  // Raytracing settings
 uniform Camera camera;      // Raytracing camera variables
 uniform int spheresCount;
+uniform int trianglesCount;
 
 // Buffer for holding sphere objects
 layout (std430, binding=0) buffer SphereBuffer
 {
     Sphere spheres[];
+};
+
+// Buffer for holding triangle objects
+layout (std430, binding=1) buffer TriangleBuffer
+{
+    Triangle triangles[];
 };
 
 // --- Randomness functions ---
@@ -141,6 +161,7 @@ vec2 randVecCartesianNormDist(inout uint seed) {
  * @return The environment light for the ray. 
  */
 vec3 GetEnvironmentLight(Ray ray) {
+    return vec3(0, 0, 0);
     // Set up environment
     // TODO: Move these to another place.
     vec3 	SkyColourHorizon = vec3(1,0,0),
@@ -197,6 +218,54 @@ HitInfo RaySphere(Ray ray, Sphere sphere) {
     return hitInfo;
 }
 
+/**
+ * Checks for an intersection between a ray and a triangle.
+ * Uses the Möller-Trumbore algorithm, see:
+ * https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+ *
+ * @param ray The ray.
+ * @param triangle The triangle.
+ *
+ * @return The hit information from the (possible) intersection.
+ */
+HitInfo RayTriangle(Ray ray, Triangle triangle) {
+    HitInfo hitInfo = HitInfo0;
+
+    // Define vectors
+    vec3    v0 = triangle.p1 - triangle.p0,
+            v1 = triangle.p2 - triangle.p0,
+            v0v1c = cross( v0, v1 );
+    
+    // Define determinant and inverse determinant
+    float   determinant = -dot( ray.dir, v0v1c ),
+            invDeterminant = 1.0 / determinant;
+
+    // If culling is enabled, verify that ray passes through triangle the right direction
+    if ( CULL_FACE && determinant < kEpsilion )
+        return hitInfo;
+    
+    // (Check if ray is parallel with triangle)
+    else if ( abs(determinant) < kEpsilion )
+        return hitInfo;
+
+    // Calculate distance to triangle and barycentric coordinates
+    vec3    v3 = ray.origin - triangle.p0,
+            v3dirc = cross( v3, ray.dir );
+
+    float   dist = dot( v3, v0v1c ) * invDeterminant,
+            u = dot( v1, v3dirc ) * invDeterminant, 
+            v = -dot( v0, v3dirc ) * invDeterminant,
+            w = 1.0 - u - v;
+    
+    // Calculate intersection information and return
+    hitInfo.didHit  = dist >= 0.0 && u >= 0.0 && v >= 0.0 && w >= 0.0;
+    hitInfo.dist    = dist;
+    hitInfo.pos     = ray.origin + ray.dir * dist;
+    hitInfo.normal  = normalize( triangle.normal0 * w + triangle.normal1 * u + triangle.normal2 * v );
+
+    return hitInfo;
+}
+
 // --- Raytracing functions ---
 /**
  * Gets the first intersection which the ray might make.
@@ -217,6 +286,17 @@ HitInfo CalculateRayCollision(Ray ray) {
         {
             closestHit = hitInfo;
             closestHit.material = sphere.material;
+        }
+    }
+
+    for (int i = 0; i < trianglesCount; i++)
+    {
+        Triangle triangle = triangles[i];
+        HitInfo hitInfo = RayTriangle(ray, triangle);
+        if (hitInfo.didHit && ( closestHit.dist < 0 || hitInfo.dist < closestHit.dist ) )
+        {
+            closestHit = hitInfo;
+            closestHit.material = triangle.material;
         }
     }
 
