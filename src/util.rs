@@ -18,6 +18,9 @@ pub fn byte_size_of_array<T>(val: &[T]) -> isize {
  * @return The c-style pointer to the array.
  */
 pub fn pointer_to_array<T>(val: &[T]) -> *const c_void {
+    if val.len() <= 0 {
+        return 0 as *const c_void
+    }
     &val[0] as *const T as *const c_void
 }
 
