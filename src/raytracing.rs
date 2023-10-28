@@ -9,8 +9,8 @@ use crate::shader::Shader;
 #[repr(C, align(16))]
 pub struct Vec3a16 {
     pub x: f32,
-        y: f32,
-        z: f32,
+    pub y: f32,
+    pub z: f32,
 }
 
 /**
@@ -144,6 +144,17 @@ impl RTTriangle {
             material: RTMaterial::new(),
         }
     }
+}
+
+/**
+ * Struct for holding mesh information.
+ */
+#[repr(C, align(16))]
+pub struct RTMeshInfo {
+    pub start_index: u32,
+    pub count: u32,
+    pub boundingbox_min: Vec3a16,
+    pub boundingbox_max: Vec3a16,
 }
 
 /**

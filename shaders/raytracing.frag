@@ -6,8 +6,9 @@
 // --- Constants ---
 const float PI = 3.1415926;
 const vec3  sunPosition = vec3(0, 0, 0);
-const bool  CULL_FACE = false;
-const float kEpsilion = 0.01;
+const bool  CULL_FACE = true;
+const bool  CLIP_MESHES = false; // Disable until triangle raycasting becomes more expensive
+const float kEpsilion = 0.001;
 
 // --- Structs ---
 
@@ -53,6 +54,14 @@ struct Triangle {
     Material    material;
 };
 
+// RTMeshInfo
+struct MeshInfo {
+    uint    startIndex,
+            count;
+    vec3    boundingBoxMin,
+            boundingBoxMax;
+};
+
 // Hit information
 struct HitInfo {
     bool        didHit;
@@ -74,7 +83,7 @@ out vec4 color;
 uniform Settings settings;  // Raytracing settings
 uniform Camera camera;      // Raytracing camera variables
 uniform int spheresCount;
-uniform int trianglesCount;
+uniform int meshesCount;
 
 // Buffer for holding sphere objects
 layout (std430, binding=0) buffer SphereBuffer
@@ -87,6 +96,13 @@ layout (std430, binding=1) buffer TriangleBuffer
 {
     Triangle triangles[];
 };
+
+// Buffer for holding triangle mesh info
+layout (std430, binding=2) buffer MeshInfoBuffer
+{
+    MeshInfo meshes[];
+};
+
 
 // --- Randomness functions ---
 
@@ -266,6 +282,30 @@ HitInfo RayTriangle(Ray ray, Triangle triangle) {
     return hitInfo;
 }
 
+/**
+ * Checks for an intersection between a ray and a bounding box.
+ * Thanks to:   https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
+ *              https://alain.xyz/blog/ray-tracing-acceleration-structures
+ *
+ * @param ray The ray.
+ * @param boxMin The bottom left corner of the box.
+ * @param boxMax The top right corner of the box.
+ *
+ * @return If the ray intersects the box at all.
+ */
+bool RayBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax) {
+    vec3    rayDirInverted = 1.0 / ray.dir,
+            boxMinRelative = (boxMin - ray.origin) * rayDirInverted,
+            boxMaxRelative = (boxMax - ray.origin) * rayDirInverted,
+            boxMinNew = min( boxMinRelative, boxMaxRelative ),
+            boxMaxNew = max( boxMinRelative, boxMaxRelative );
+    
+    float   maxMinAxis = max( max( boxMinNew.x, boxMinNew.y ), boxMinNew.z ),
+            minMaxAxis = min( min( boxMaxNew.x, boxMaxNew.y ), boxMaxNew.z );
+
+    return maxMinAxis <= minMaxAxis;
+}
+
 // --- Raytracing functions ---
 /**
  * Gets the first intersection which the ray might make.
@@ -277,9 +317,8 @@ HitInfo CalculateRayCollision(Ray ray) {
     HitInfo closestHit = HitInfo0;
     closestHit.dist = -1;
 
-    // Iterate primitives, checking for collisions
-    for (int i = 0; i < spheresCount; i++)
-    {
+    // Raycast spheres
+    for (int i = 0; i < spheresCount; i++) {
         Sphere sphere = spheres[i];
         HitInfo hitInfo = RaySphere(ray, sphere);
         if (hitInfo.didHit && ( closestHit.dist < 0 || hitInfo.dist < closestHit.dist ) )
@@ -289,14 +328,27 @@ HitInfo CalculateRayCollision(Ray ray) {
         }
     }
 
-    for (int i = 0; i < trianglesCount; i++)
-    {
-        Triangle triangle = triangles[i];
-        HitInfo hitInfo = RayTriangle(ray, triangle);
-        if (hitInfo.didHit && ( closestHit.dist < 0 || hitInfo.dist < closestHit.dist ) )
-        {
-            closestHit = hitInfo;
-            closestHit.material = triangle.material;
+    // Raycast meshes (triangles)
+    for (int i = 0; i < meshesCount; i++) {
+        MeshInfo meshInfo = meshes[i];
+
+        // Cull meshes
+        if (!RayBoundingBox( ray, meshInfo.boundingBoxMin, meshInfo.boundingBoxMax ))
+            continue;
+        
+        for (uint j = meshInfo.startIndex; j < meshInfo.startIndex + meshInfo.count; j++) {
+            Triangle triangle = triangles[j];
+
+            // "Clip" meshes (cull triangles) if enabled
+            if ( CLIP_MESHES && !RayBoundingBox( ray, min(min(triangle.p0, triangle.p1), triangle.p2), max(max(triangle.p0, triangle.p1), triangle.p2) ) )
+                continue;
+
+            HitInfo hitInfo = RayTriangle(ray, triangle);
+            if (hitInfo.didHit && ( closestHit.dist < 0 || hitInfo.dist < closestHit.dist ) )
+            {
+                closestHit = hitInfo;
+                closestHit.material = triangle.material;
+            }
         }
     }
 

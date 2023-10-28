@@ -4,7 +4,7 @@ use std::sync::{Mutex, Arc, RwLock};
 
 use glutin::event::{Event, WindowEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self}};
 use glutin::event_loop::ControlFlow;
-use raytracing::{RTSphere, RTMaterial, RTSettings, RTCamera, RTTriangle};
+use raytracing::{RTSphere, RTMaterial, RTSettings, RTCamera};
 
 extern crate nalgebra_glm as glm;
 
@@ -12,6 +12,7 @@ mod util;
 mod shader;
 mod camera;
 mod raytracing;
+mod mesh;
 
 // Initial window size
 const INITIAL_SCREEN_W: u32 = 720;
@@ -84,7 +85,8 @@ fn main() {
             3.0,
         );
 
-        // Set up game objects
+        // --- Set up game objects
+        // Set up screen quad
         let (vertices, indices) = util::create_billboard();
         let my_vao = unsafe {util::create_vao(&vertices, &indices)};
         let simple_shader = unsafe {
@@ -94,10 +96,32 @@ fn main() {
                 .link()
         };
 
+        // Load knight model
+        let model_knight = mesh::Model::new()
+            .load_from_file("resources/knight.obj");
+
+        let ( triangles, meshes ) = model_knight.generate_raytracing_structs();
+        let meshes_count = meshes.len();
+
+        // Create SSBOs for triangles/meshes
+        let triangles_ssbo = unsafe {
+            shader::SSBOBuilder::new()
+                .set_data( triangles )
+                .set_shader_details( simple_shader.pid, 1, "TriangleBuffer")
+                .link()
+        };
+
+        let meshes_ssbo = unsafe {
+            shader::SSBOBuilder::new()
+                .set_data( meshes )
+                .set_shader_details( simple_shader.pid, 2, "MeshInfoBuffer")
+                .link()
+        };
+
         // Set shader settings
         let settings = RTSettings {
-            max_bounces: 6,
-            rays_per_frag: 16,
+            max_bounces: 3,
+            rays_per_frag: 8,
             diverge_strength: 0.07,
         };
 
@@ -118,47 +142,6 @@ fn main() {
             shader::SSBOBuilder::new()
                 .set_data( spheres )
                 .set_shader_details( simple_shader.pid, 0, "SphereBuffer" )
-                .link()
-        };
-
-        // Create SSBO for triangles
-        let triangles = vec![
-            RTTriangle {
-                p0:  glm::vec3( 0.0, -3.0, 3.0).into(),
-                p1: glm::vec3( 10.0, -3.0, 3.0).into(),
-                p2: glm::vec3( 0.0, 7.0, 3.0).into(),
-                normal0: glm::vec3( 0.0, 1.0, 0.0 ).into(),
-                normal1: glm::vec3( 0.0, 1.0, 0.0 ).into(),
-                normal2: glm::vec3( 0.0, 1.0, 0.0 ).into(),
-                material: RTMaterial {
-                    color: glm::vec4( 1.0, 0.0, 0.3, 1.0 ),
-                    emission_color: glm::vec4( 1.0, 0.0, 0.3, 0.3 ),
-                    specular_color: glm::vec4( 1.0, 1.0, 1.0, 0.0 ),
-                    smoothness: 0.0,
-                }
-            },
-
-            RTTriangle {
-                p0:  glm::vec3( 0.0, -3.0, 0.0).into(),
-                p1: glm::vec3( 10.0, -3.0, 0.0).into(),
-                p2: glm::vec3( 0.0, 7.0, 0.0).into(),
-                normal0: glm::vec3( 0.0, 0.0, 1.0 ).into(),
-                normal1: glm::vec3( 0.0, 0.0, 1.0 ).into(),
-                normal2: glm::vec3( 0.0, 1.0, 1.0 ).into(),
-                material: RTMaterial {
-                    color: glm::vec4( 1.0, 1.0, 1.0, 1.0 ),
-                    emission_color: glm::vec4( 1.0, 0.0, 0.0, 0.0 ),
-                    specular_color: glm::vec4( 1.0, 0.0, 0.0, 0.0 ),
-                    smoothness: 0.0,
-                }
-            },
-        ];
-        let triangles_count = triangles.len();
-        
-        let ssbo_triangles = unsafe {
-            shader::SSBOBuilder::new()
-                .set_data( triangles )
-                .set_shader_details( simple_shader.pid, 1, "TriangleBuffer" )
                 .link()
         };
 
@@ -307,7 +290,7 @@ fn main() {
                     ]
                 );
                 gl::Uniform1i( simple_shader.get_uniform_location( "spheresCount" ), spheres_count as i32);
-                gl::Uniform1i( simple_shader.get_uniform_location( "trianglesCount" ), triangles_count as i32);
+                gl::Uniform1i( simple_shader.get_uniform_location( "meshesCount" ), meshes_count as i32);
 
                 // Draw
                 gl::BindVertexArray(my_vao);
