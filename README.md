@@ -1,5 +1,5 @@
 # opengl-raytracing-engine
-(IMAGE OF KNIGHT MODEL HERE?)
+![Image of a knight model](https://github.com/Thefantasticbagle/OpenGL_raytracing_engine/blob/b50dadbdff04a113e2184796990bea895b9ffd51/images/knight.png)
 A simple raytracing engine made from scratch in [Rust](https://en.wikipedia.org/wiki/Rust_(programming_language)) with [OpenGL](https://en.wikipedia.org/wiki/OpenGL).
 
 Thanks to the book series "Ray Tracing in One Weekend", which is available at https://raytracing.github.io/ for free.
@@ -24,10 +24,10 @@ Each primitive has a material which describes its physical attributes. So far, t
 
 In the future I would like to add properties such as transparency and refractive index.
 
-(IMAGE OF SMOOTHNESS HERE)
+![Image of a circle of spheres showing different degrees of smoothness](https://github.com/Thefantasticbagle/OpenGL_raytracing_engine/blob/b50dadbdff04a113e2184796990bea895b9ffd51/images/smoothness.png)
 *reflective spheres with varying degrees of smoothness*
 
-(IMAGE OF MIRRORS HERE)
+![Image of a circle of spherical mirrors](https://github.com/Thefantasticbagle/OpenGL_raytracing_engine/blob/b50dadbdff04a113e2184796990bea895b9ffd51/images/mirrors.png)
 *mirror spheres showing reflections in reflections*
 
 ### Anti-aliasing
@@ -35,7 +35,7 @@ If you look closely at the image above you might notice that the edges look "cho
 
 To avoid aliasing artifacts, [Distributed Ray Tracing (DRT)](https://en.wikipedia.org/wiki/Distributed_ray_tracing) and [Supersampling](https://en.wikipedia.org/wiki/Supersampling) is used.
 
-(IMAGE OF ANTI-ALIASING COMPARISON)
+![Image showing comparison between no anti-aliasing and anti-aliasing enabled](https://github.com/Thefantasticbagle/OpenGL_raytracing_engine/blob/b50dadbdff04a113e2184796990bea895b9ffd51/images/antialiascomparison.png)
 *comparison with and without SSAA anti-aliasing enabled*
 
 ### Acceleration structures & culling
